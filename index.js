@@ -88,10 +88,15 @@ $win.connect(
   $url.connect(
     "activate",
     () => {
-      let url = $url.get_text();
-      url = /^\w+:/.test(url) ? url : `https://${url}`;
-      $url.set_text(url);
-      state.$web.load_uri(url);
+      const x = $url.text;
+      state.$web.grab_focus();
+      state.$web.load_uri(
+        x.search(/[/.:]/) === -1
+          ? `https://duckduckgo.com/lite/?q=${encodeURIComponent(x)}`
+          : x.indexOf(":") === -1
+          ? `https://${x}`
+          : x
+      );
     }
   );
   $url.connect(

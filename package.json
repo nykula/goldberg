@@ -12,6 +12,7 @@
   "author": "makepost <makepost@firemail.cc>",
   "license": "MIT",
   "devDependencies": {
+    "pre-commit": "^1.2.2",
     "prettier": "^1.15.3",
     "ts-for-gjs": "git+https://github.com/sammydre/ts-for-gjs.git",
     "tslint": "^5.12.0",
