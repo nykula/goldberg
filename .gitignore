@@ -1,0 +1,11 @@
+*-lock*
+*.db*
+*.lock*
+*.log*
+*_*
+*~
+.*
+!.git?*
+!.vscode
+coverage
+dist
