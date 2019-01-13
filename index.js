@@ -1,4 +1,4 @@
-#!/usr/bin/gjs
+#!/usr/bin/env gjs
 const {
   AccelFlags,
   AccelGroup,
@@ -17,7 +17,13 @@ const {
   WindowPosition
 } = imports.gi.Gtk;
 const { EllipsizeMode } = imports.gi.Pango;
-const { FindOptions, ProcessModel, WebContext, WebView } = imports.gi.WebKit2;
+const {
+  FindOptions,
+  ProcessModel,
+  Settings,
+  WebContext,
+  WebView
+} = imports.gi.WebKit2;
 
 /** @param {any} [x] */ const ANY = x => x;
 const state = {
@@ -165,7 +171,10 @@ on($app)("activate", () => {
     return $web;
   };
   const Tab = () => {
-    const $web = new WebView();
+    const settings = new Settings({ enable_private_browsing: true });
+    settings.enable_developer_extras = true;
+    settings.enable_smooth_scrolling = false;
+    const $web = new WebView({ related_view: state.$web || null, settings });
     on($web)("create", Tab);
     on($web)("load-changed", () => state.$web === $web && (state.$web = $web));
     on($web)("mouse-target-changed", (_, x) => {
@@ -176,7 +185,6 @@ on($app)("activate", () => {
     });
     on($web)("notify::uri", () => state.$web === $web && (state.$web = $web));
     on($web)("ready-to-show", Current);
-    $web.get_settings().enable_developer_extras = true;
     return $web;
   };
   Blank();
