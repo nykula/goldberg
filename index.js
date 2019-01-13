@@ -17,7 +17,7 @@ const {
   WindowPosition
 } = imports.gi.Gtk;
 const { EllipsizeMode } = imports.gi.Pango;
-const { ProcessModel, WebContext, WebView } = imports.gi.WebKit2;
+const { FindOptions, ProcessModel, WebContext, WebView } = imports.gi.WebKit2;
 
 /** @param {any} [x] */ const ANY = x => x;
 const state = {
@@ -62,15 +62,24 @@ on($app)("activate", () => {
         const [key, mod] = imports.gi.Gtk.accelerator_parse(x).map(Number);
         on($accel)(key, mod, AccelFlags.VISIBLE, () => (callback(), true));
       });
-    accel("<Ctrl>l;<Meta>l;F6", () => state.$url.grab_focus());
+    accel("<Alt>Left", () => state.$web.go_back());
+    accel("<Alt>Right", () => state.$web.go_forward());
+    accel("<Alt>l;<Ctrl>f;<Ctrl>l;F6", () => state.$url.grab_focus());
+    accel("<Ctrl>g", () => state.$web.get_find_controller().search_next());
     accel("<Ctrl>Page_Down", () => state.$tabs.next_page());
     accel("<Ctrl>Page_Up", () => state.$tabs.prev_page());
     accel("<Ctrl>r;F5", () => state.$web.reload());
     accel("<Ctrl>t", () => Blank());
     accel("<Ctrl>w", () => state.$web.destroy());
-    accel("<Meta>Left", () => state.$web.go_back());
-    accel("<Meta>Right", () => state.$web.go_forward());
-    accel("Escape", () => state.$web.stop_loading());
+    accel("<Shift><Ctrl>g", () =>
+      state.$web.get_find_controller().search_previous()
+    );
+    accel("Escape", () => {
+      state.$web.grab_focus();
+      state.$web.get_find_controller().search_finish();
+      state.$web.stop_loading();
+      state.$web = state.$web;
+    });
     $win.add_accel_group($accel);
   }
   {
@@ -102,13 +111,20 @@ on($app)("activate", () => {
       state.$web.grab_focus();
       state.$web.load_uri(
         x.search(/[/.:]/) === -1
-          ? `https://duckduckgo.com/lite/?q=${encodeURIComponent(x)}`
-          : x.indexOf(":") === -1
+          ? `https://duckduckgo.com/lite/?kd=-1&q=${encodeURIComponent(x)}`
+          : x.indexOf("/") === 0
+          ? `file://${x}`
+          : x.indexOf(":/") === -1
           ? `https://${x}`
           : x
       );
     });
     on($url)("focus-out-event", () => $url.select_region(0, 0));
+    on($url)("changed", () =>
+      state.$web
+        .get_find_controller()
+        .search($url.text, FindOptions.CASE_INSENSITIVE, 0)
+    );
     state._$web._.push(() => ($url.text = decodeURI(state.$web.uri || "")));
     $nav.custom_title = state.$url = $url;
 
@@ -152,10 +168,12 @@ on($app)("activate", () => {
     const $web = new WebView();
     on($web)("create", Tab);
     on($web)("load-changed", () => state.$web === $web && (state.$web = $web));
-    on($web)(
-      "mouse-target-changed",
-      (_, x) => (state.$url.text = x.get_link_uri() || _.uri || state.$url.text)
-    );
+    on($web)("mouse-target-changed", (_, x) => {
+      if (!state.$url.has_focus) {
+        state.$url.text =
+          decodeURI(x.get_link_uri() || _.uri) || state.$url.text;
+      }
+    });
     on($web)("notify::uri", () => state.$web === $web && (state.$web = $web));
     on($web)("ready-to-show", Current);
     $web.get_settings().enable_developer_extras = true;
