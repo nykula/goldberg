@@ -1,4 +1,5 @@
 #!/usr/bin/env gjs
+const { AppInfo, AppInfoCreateFlags } = imports.gi.Gio;
 const {
   AccelFlags,
   AccelGroup,
@@ -71,18 +72,37 @@ on($app)("activate", () => {
     accel("<Alt>Left", () => state.$web.go_back());
     accel("<Alt>Right", () => state.$web.go_forward());
     accel("<Alt>l;<Ctrl>f;<Ctrl>l;F6", () => state.$url.grab_focus());
-    accel("<Ctrl>g", () => state.$web.get_find_controller().search_next());
-    accel("<Ctrl>Page_Down", () => state.$tabs.next_page());
-    accel("<Ctrl>Page_Up", () => state.$tabs.prev_page());
+    accel("<Ctrl>g;F3", () =>
+      Find().get_search_text()
+        ? (Find().search_next(), Js(Select))
+        : state.$url.grab_focus()
+    );
+    accel("<Ctrl>Page_Down", () =>
+      state.$tabs.get_current_page() === state.$tabs.get_n_pages() - 1
+        ? state.$tabs.set_current_page(0)
+        : state.$tabs.next_page()
+    );
+    accel("<Ctrl>Page_Up", () =>
+      state.$tabs.get_current_page()
+        ? state.$tabs.prev_page()
+        : state.$tabs.set_current_page(state.$tabs.get_n_pages() - 1)
+    );
     accel("<Ctrl>r;F5", () => state.$web.reload());
     accel("<Ctrl>t", () => Blank());
     accel("<Ctrl>w", () => state.$web.destroy());
-    accel("<Shift><Ctrl>g", () =>
-      state.$web.get_find_controller().search_previous()
+    accel("<Ctrl>z", () => Js("document.execCommand('undo', false, null)"));
+    accel("<Shift><Ctrl>g;<Shift>F3", () =>
+      Find().get_search_text()
+        ? (Find().search_previous(), Js(Select))
+        : state.$url.grab_focus()
+    );
+    accel("<Shift><Ctrl>z;<Ctrl>y", () =>
+      Js("document.execCommand('redo', false, null)")
     );
     accel("Escape", () => {
+      Find().search_finish();
+      Find().search("", 0, 0);
       state.$web.grab_focus();
-      state.$web.get_find_controller().search_finish();
       state.$web.stop_loading();
       state.$web = state.$web;
     });
@@ -125,12 +145,13 @@ on($app)("activate", () => {
           : x
       );
     });
+    on($url)("changed", () => {
+      if ($url.has_focus) {
+        Find().search($url.text, FindOptions.CASE_INSENSITIVE, 0);
+        Js(Select);
+      }
+    });
     on($url)("focus-out-event", () => $url.select_region(0, 0));
-    on($url)("changed", () =>
-      state.$web
-        .get_find_controller()
-        .search($url.text, FindOptions.CASE_INSENSITIVE, 0)
-    );
     state._$web._.push(() => ($url.text = decodeURI(state.$web.uri || "")));
     $nav.custom_title = state.$url = $url;
 
@@ -153,9 +174,8 @@ on($app)("activate", () => {
     $win.add((state.$tabs = $tabs));
   }
   $win.show_all();
-  const Blank = () => (Current(Tab()), state.$url.grab_focus());
   /** @param {WebView} $web */
-  const Current = $web => {
+  const Append = $web => {
     $web.visible = true;
     on($web)("destroy", () => state.$tabs.get_n_pages() || $win.destroy());
     const $box = new Box();
@@ -167,24 +187,38 @@ on($app)("activate", () => {
     $box.add($close);
     $box.show_all();
     const i = state.$tabs.append_page(ANY($web), $box);
-    state.$tabs.set_current_page(i);
-    return $web;
+    state.$web = state.$web;
+    return i;
   };
+  const Blank = () => {
+    state.$tabs.set_current_page(Append(Tab()));
+    state.$url.grab_focus();
+  };
+  const Find = () => state.$web.get_find_controller();
+  /** @param {string} x */
+  const Js = x => state.$web.run_javascript(x, null, null);
+  const Select =
+    "for(let x=document.getSelection().focusNode;x=x.parentNode;)if(x.focus){x.focus();break;}";
   const Tab = () => {
-    const settings = new Settings({ enable_private_browsing: true });
-    settings.enable_developer_extras = true;
+    const ctx = WebContext.new_ephemeral();
+    on(ctx)("download-started", (_, x) => {
+      const opt = AppInfoCreateFlags.NEEDS_TERMINAL;
+      const ai = AppInfo.create_from_commandline("wget %U", "wget", opt);
+      ai.launch_uris([x.get_request().uri], null);
+    });
+    const settings = new Settings({ enable_developer_extras: true });
     settings.enable_smooth_scrolling = false;
-    const $web = new WebView({ related_view: state.$web || null, settings });
-    on($web)("create", Tab);
+    let $web = state.$web || null;
+    $web = new WebView({ related_view: $web, settings, web_context: ctx });
+    on($web)("create", () => state.$tabs.get_nth_page(Append(Tab())));
     on($web)("load-changed", () => state.$web === $web && (state.$web = $web));
     on($web)("mouse-target-changed", (_, x) => {
       if (!state.$url.has_focus) {
         state.$url.text =
-          decodeURI(x.get_link_uri() || _.uri) || state.$url.text;
+          decodeURI(x.get_link_uri() || _.uri || "") || state.$url.text;
       }
     });
     on($web)("notify::uri", () => state.$web === $web && (state.$web = $web));
-    on($web)("ready-to-show", Current);
     return $web;
   };
   Blank();
