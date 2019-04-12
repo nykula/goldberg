@@ -72,6 +72,8 @@ on($app)("activate", () => {
     accel("<Alt>Left", () => state.$web.go_back());
     accel("<Alt>Right", () => state.$web.go_forward());
     accel("<Alt>l;<Ctrl>f;<Ctrl>l;F6", () => state.$url.grab_focus());
+    accel("<Ctrl>0", () => Zoom(1));
+    accel("<Ctrl>equal", () => Zoom(state.$web.get_zoom_level() * 1.25));
     accel("<Ctrl>g;F3", () =>
       Find().get_search_text()
         ? (Find().search_next(), Js(Select))
@@ -87,6 +89,7 @@ on($app)("activate", () => {
         ? state.$tabs.prev_page()
         : state.$tabs.set_current_page(state.$tabs.get_n_pages() - 1)
     );
+    accel("<Ctrl>minus", () => Zoom(state.$web.get_zoom_level() / 1.25));
     accel("<Ctrl>r;F5", () => state.$web.reload());
     accel("<Ctrl>t", () => Blank());
     accel("<Ctrl>w", () => state.$web.destroy());
@@ -221,6 +224,8 @@ on($app)("activate", () => {
     on($web)("notify::uri", () => state.$web === $web && (state.$web = $web));
     return $web;
   };
+  /** @param {number} x */
+  const Zoom = x => state.$web.set_zoom_level(Number(x.toFixed(1)));
   Blank();
 });
 $app.run(ARGV);
