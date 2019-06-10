@@ -15,4 +15,4 @@ For development, `npm i` installs type checker, `npm run format` runs it.
 
 ## License
 
-MIT
+[0BSD](LICENSE), a public domain equivalent.

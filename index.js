@@ -28,6 +28,7 @@ const {
 
 /** @param {any} [x] */ const ANY = x => x;
 const state = {
+  /** @type {Button} */ $js: ANY(),
   /** @type {Notebook} */ $tabs: ANY(),
   /** @type {Entry} */ $url: ANY(),
   /** @type {WebView} */ $web: ANY(),
@@ -42,13 +43,12 @@ Object.defineProperty(state, "$web", {
 });
 /** @type {<T>(x: { connect: T }) => T} */
 const on = x => ANY((/** @type {any[]} */ ...args) => x.connect(...args));
-/** @param {{ icon_name: string }} props */
-const ButtonNav = ({ icon_name }) =>
-  new Button({
-    focus_on_click: false,
-    image: new Image({ icon_name, icon_size: IconSize.MENU }),
-    relief: ReliefStyle.NONE
-  });
+/** @param {string} icon_name */ const BtnIco = icon_name => {
+  const image = new Image({ icon_name, icon_size: IconSize.MENU });
+  return new Button({ focus_on_click: false, image, relief: ReliefStyle.NONE });
+};
+/** @param {string} label */ const BtnTxt = label =>
+  new Button({ focus_on_click: false, label, relief: ReliefStyle.NONE });
 const $app = new Application({ application_id: "org.js.goldberg" });
 on($app)("activate", () => {
   WebContext.get_default().set_process_model(
@@ -79,6 +79,7 @@ on($app)("activate", () => {
         ? (Find().search_next(), Js(Select))
         : state.$url.grab_focus()
     );
+    accel("<Ctrl>j", () => state.$js.clicked());
     accel("<Ctrl>Page_Down", () =>
       state.$tabs.get_current_page() === state.$tabs.get_n_pages() - 1
         ? state.$tabs.set_current_page(0)
@@ -114,22 +115,22 @@ on($app)("activate", () => {
   {
     const $nav = new HeaderBar({ show_close_button: true });
 
-    const $prev = ButtonNav({ icon_name: "go-previous-symbolic" });
+    const $prev = BtnIco("go-previous-symbolic");
     on($prev)("clicked", () => state.$web.go_back());
     state._$web._.push(() => ($prev.sensitive = state.$web.can_go_back()));
     $nav.add($prev);
 
-    const $next = ButtonNav({ icon_name: "go-next-symbolic" });
+    const $next = BtnIco("go-next-symbolic");
     on($next)("clicked", () => state.$web.go_forward());
     state._$web._.push(() => ($next.sensitive = state.$web.can_go_forward()));
     $nav.add($next);
 
-    const $refresh = ButtonNav({ icon_name: "view-refresh-symbolic" });
+    const $refresh = BtnIco("view-refresh-symbolic");
     on($refresh)("clicked", () => state.$web.reload());
     state._$web._.push(() => ($refresh.visible = !state.$web.is_loading));
     $nav.add($refresh);
 
-    const $stop = ButtonNav({ icon_name: "process-stop-symbolic" });
+    const $stop = BtnIco("process-stop-symbolic");
     on($stop)("clicked", () => state.$web.stop_loading());
     state._$web._.push(() => ($stop.visible = state.$web.is_loading));
     $nav.add($stop);
@@ -158,7 +159,15 @@ on($app)("activate", () => {
     state._$web._.push(() => ($url.text = decodeURI(state.$web.uri || "")));
     $nav.custom_title = state.$url = $url;
 
-    const $add = ButtonNav({ icon_name: "list-add-symbolic" });
+    const $js = BtnTxt("Js");
+    on($js)("clicked", () => {
+      state.$web.get_settings().enable_javascript = Nojs();
+      state.$web = state.$web;
+    });
+    state._$web._.push(() => ($js.label = Nojs() ? "Nojs" : "Js"));
+    $nav.pack_end((state.$js = $js));
+
+    const $add = BtnIco("list-add-symbolic");
     on($add)("clicked", () => Blank());
     state._$web._.push(() => ($add.visible = state.$tabs.get_n_pages() <= 1));
     $nav.pack_end($add);
@@ -169,7 +178,7 @@ on($app)("activate", () => {
     const $tabs = new Notebook({ scrollable: true, show_border: false });
     on($tabs)("switch-page", (_, $web) => (state.$web = ANY($web)));
     state._$web._.push(() => ($tabs.show_tabs = $tabs.get_n_pages() > 1));
-    const $add = ButtonNav({ icon_name: "list-add-symbolic" });
+    const $add = BtnIco("list-add-symbolic");
     on($add)("clicked", () => Blank());
     $add.margin_right = 5;
     $add.visible = true;
@@ -185,7 +194,7 @@ on($app)("activate", () => {
     const $label = new Label({ ellipsize: EllipsizeMode.END, hexpand: true });
     on($web)("notify::title", () => ($label.label = $web.title || $web.uri));
     $box.add(Object.assign($label, { label: "..." }));
-    const $close = ButtonNav({ icon_name: "window-close-symbolic" });
+    const $close = BtnIco("window-close-symbolic");
     on($close)("clicked", () => $web.destroy());
     $box.add($close);
     $box.show_all();
@@ -200,6 +209,7 @@ on($app)("activate", () => {
   const Find = () => state.$web.get_find_controller();
   /** @param {string} x */
   const Js = x => state.$web.run_javascript(x, null, null);
+  const Nojs = () => !state.$web.get_settings().enable_javascript;
   const Select =
     "for(let x=document.getSelection().focusNode;x=x.parentNode;)if(x.focus){x.focus();break;}";
   const Tab = () => {
@@ -210,16 +220,16 @@ on($app)("activate", () => {
       ai.launch_uris([x.get_request().uri], null);
     });
     const settings = new Settings({ enable_developer_extras: true });
+    settings.enable_javascript = false;
     settings.enable_smooth_scrolling = false;
     let $web = state.$web || null;
     $web = new WebView({ related_view: $web, settings, web_context: ctx });
     on($web)("create", () => state.$tabs.get_nth_page(Append(Tab())));
     on($web)("load-changed", () => state.$web === $web && (state.$web = $web));
     on($web)("mouse-target-changed", (_, x) => {
-      if (!state.$url.has_focus) {
+      if (!state.$url.has_focus)
         state.$url.text =
           decodeURI(x.get_link_uri() || _.uri || "") || state.$url.text;
-      }
     });
     on($web)("notify::uri", () => state.$web === $web && (state.$web = $web));
     return $web;
